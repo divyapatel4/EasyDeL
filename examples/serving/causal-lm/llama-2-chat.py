@@ -7,7 +7,7 @@ from fjformer.load._load import get_float_dtype_by_name
 from EasyDel.transform import llama_from_pretrained
 from transformers import AutoTokenizer
 import gradio as gr
-
+import jax
 import argparse
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant in the rule of a operator. Always answer " \
@@ -49,10 +49,25 @@ class Llama2Host(JAXServer):
 
     @classmethod
     def load_from_torch(cls, repo_id, config=None):
-        with jax.default_device(jax.devices('cpu')[0]):
+        # use TPU if available on google cloud 
+        # else use GPU if available
+        # else use CPU
+        if jax.devices('tpu'):
             param, config_model = llama_from_pretrained(
-                repo_id
+                repo_id,
+                device = jax.devices('tpu')[0]
             )
+        elif jax.devices('gpu'):
+            param, config_model = llama_from_pretrained(
+                repo_id,
+                device = jax.devices('gpu')[0]
+            )
+        else:
+            param, config_model = llama_from_pretrained(
+                repo_id,
+                device = jax.devices('cpu')[0]
+            )
+    
         tokenizer = AutoTokenizer.from_pretrained(repo_id)
         model = EasyDel.modules.FlaxLlamaForCausalLM(
             config=config_model,
